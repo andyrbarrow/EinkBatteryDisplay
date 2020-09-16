@@ -14,17 +14,18 @@
 
 #include <Arduino.h>
 #include <GxEPD2_BW.h>
-#include <GxEPD2_3C.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
+#include <Fonts/FreeSansBold9pt7b.h>
 #include "GxEPD2_boards_added.h"
-#include "bitmaps/Bitmaps3c128x296.h" // 2.9"  b/w/r
 #include <INA.h>
 #include <WiFi.h>
 //this is version 5 of ArduinoJson. Some day I'll port to version 6 ....
 #include <ArduinoJson.h>
 #include <WiFiUdp.h>
+#include "time.h"
+#include "lwip/apps/sntp.h"
 
 /**************************************************************************************************
 ** Declare program constants, global variables and instantiate INA class                         **
@@ -70,6 +71,13 @@ const char* batt1CurrentKey = "electrical.batteries.bank1.current";
 const char* batt2VoltageKey = "electrical.batteries.bank2.voltage";
 const char* batt2CurrentKey = "electrical.batteries.bank2.current";
 
+/********************************************************
+ * Time
+********************************************************/
+time_t now;
+char strftime_buf[64];
+struct tm timeinfo;
+
 /*********************************************************
 **Function Definitions for PlatformIO
 *********************************************************/
@@ -107,6 +115,10 @@ void setup()
   display.init(115200);
   drawScreenOutline();
   setup_wifi();
+  sntp_setoperatingmode(SNTP_OPMODE_POLL);
+  sntp_setservername(0, "pool.ntp.org");
+  sntp_setservername(1, "houseserver.local");
+  sntp_init();
 }
 
 void loop()
@@ -121,7 +133,12 @@ void loop()
   uint16_t box_y = 45;
   uint16_t box_w = 115;
   uint16_t box_h = 70;
-  uint16_t cursor_y = box_y + box_h - 45;
+  uint16_t cursor_y = box_y + box_h - 50;
+  
+  time(&now);
+  setenv("TZ", "CST6CDT", 1);
+  tzset();
+  localtime_r(&now, &timeinfo);
 
   Serial.println("Battery 1");
   Serial.print("Voltage: ");
@@ -151,10 +168,14 @@ void loop()
       display.print(busChar);
       display.setCursor(box_x + 80, cursor_y);
       display.print(" V");
-      display.setCursor(box_x, cursor_y+40);
+      display.setCursor(box_x, cursor_y+35);
       display.print(busMAChar);
-      display.setCursor(box_x + 80, cursor_y+40);
+      display.setCursor(box_x + 80, cursor_y+35);
       display.print(" A");
+      display.setCursor(box_x+20, cursor_y + 53);
+      display.setFont(&FreeSansBold9pt7b);
+      strftime(strftime_buf, sizeof(strftime_buf), "%D", &timeinfo);
+      display.print(strftime_buf);
     }
   while (display.nextPage());
   //delay(1000);
@@ -189,10 +210,14 @@ void loop()
       display.print(busChar);
       display.setCursor(box_x + 80, cursor_y);
       display.print(" V");
-      display.setCursor(box_x, cursor_y+40);
+      display.setCursor(box_x, cursor_y+35);
       display.print(busMAChar);
-      display.setCursor(box_x + 80, cursor_y+40);
+      display.setCursor(box_x + 80, cursor_y+35);
       display.print(" A");
+      display.setFont(&FreeSansBold9pt7b);
+      display.setCursor(box_x+20, cursor_y + 53);
+      strftime(strftime_buf, sizeof(strftime_buf), "%T", &timeinfo);
+      display.print(strftime_buf);
     }
   while (display.nextPage());
   //delay(1000);
@@ -258,12 +283,12 @@ void drawScreenOutline()
   do { //Draw two boxes on the screen
     display.fillScreen(GxEPD_WHITE);
     display.fillScreen(GxEPD_BLACK);
-    display.fillRect(2,2,display.width()-4, (display.height()/2)-4,GxEPD_WHITE);
-    display.fillRect(2, (display.height() / 2)+2, display.width()-4, (display.height()/2)-4,GxEPD_WHITE);
+    display.fillRect(37,2,display.width()-4, (display.height()/2)-4,GxEPD_WHITE);
+    display.fillRect(37, (display.height() / 2)+2, display.width()-4, (display.height()/2)-4,GxEPD_WHITE);
     display.setRotation(3);
     display.setFont(&FreeSansBold18pt7b);
-    display.setTextColor(GxEPD_BLACK);
-    display.setCursor(8, 30);
+    display.setTextColor(GxEPD_WHITE);
+    display.setCursor(12, 30);
     display.print(batt1Name);
     display.setCursor(154, 30);
     display.print(batt2Name);
