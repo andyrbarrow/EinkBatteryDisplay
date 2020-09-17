@@ -116,8 +116,8 @@ void setup()
   drawScreenOutline();
   setup_wifi();
   sntp_setoperatingmode(SNTP_OPMODE_POLL);
+  sntp_setservername(0, "10.10.10.1");
   sntp_setservername(0, "pool.ntp.org");
-  sntp_setservername(1, "houseserver.local");
   sntp_init();
 }
 
@@ -178,8 +178,6 @@ void loop()
       display.print(strftime_buf);
     }
   while (display.nextPage());
-  //delay(1000);
-
   Serial.println("Battery 2");
   Serial.print("Voltage: ");
   x = getDeviceData(batt2VoltageDev);
@@ -220,8 +218,6 @@ void loop()
       display.print(strftime_buf);
     }
   while (display.nextPage());
-  //delay(1000);
-
   /* Uncomment this to detect and display device numbers
   static uint16_t loopCounter = 0;     // Count the number of iterations
   static char     shuntChar[10], busMWChar[10];  // Output buffers
@@ -294,6 +290,7 @@ void drawScreenOutline()
     display.print(batt2Name);
   }
   while (display.nextPage());
+  
   // if the device didn't find wifi before, it will just move on after 30 seconds. Here we check again for
   // wifi. This will delay reading battery voltage 30 seconds, so if you don't want that delay and don't care about
   // reconnecting WiFi, comment this out. If wifi is already connected, there will be no delay.
