@@ -249,12 +249,11 @@ void loop()
   Serial.print(++loopCounter);
   Serial.print("\n\n");*/
   refreshCounter ++;
-  //Do a full screen refresh to keep the display healthy. Each screen take 20 seconds, so 15 here is 5 min.
-  if (refreshCounter > 100){
+  // Do a full screen refresh to keep the display healthy. With a B/W screen there are about 4 cycles/second, so 
+  // setting this to 2400 will fully refresh the screen about every 10 minutes.
+  if (refreshCounter > 2400){
     // This will refresh the entire screen
     drawScreenOutline();
-    // Just in case the wifi isn't connected, try again.
-    setup_wifi();
     refreshCounter = 0;
   }
 }
@@ -275,10 +274,10 @@ float * getDeviceData (int deviceNumber){
 void drawScreenOutline()
 {
   // Draw two side-by-side boxes
-  //display.writeFillRect(0,0,display.width(),display.height(),GxEPD_BLACK);
+  display.setRotation(0);
+  display.setFullWindow();
   display.firstPage();
   do { //Draw two boxes on the screen
-    display.fillScreen(GxEPD_WHITE);
     display.fillScreen(GxEPD_BLACK);
     display.fillRect(37,2,display.width()-4, (display.height()/2)-4,GxEPD_WHITE);
     display.fillRect(37, (display.height() / 2)+2, display.width()-4, (display.height()/2)-4,GxEPD_WHITE);
