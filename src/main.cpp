@@ -116,6 +116,7 @@ void setup()
   drawScreenOutline();
   setup_wifi();
   sntp_setoperatingmode(SNTP_OPMODE_POLL);
+  // This assumes your RPI server has NTP running. You can use the SignalK "Set System Time" plugin to set the time
   sntp_setservername(0, "10.10.10.1");
   sntp_setservername(0, "pool.ntp.org");
   sntp_init();
