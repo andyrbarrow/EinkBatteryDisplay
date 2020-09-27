@@ -20,6 +20,7 @@
 #include <Fonts/FreeSansBold9pt7b.h>
 #include "GxEPD2_boards_added.h"
 #include <INA.h>
+#include <Adafruit_ADS1015.h>
 #include <WiFi.h>
 //this is version 5 of ArduinoJson. Some day I'll port to version 6 ....
 #include <ArduinoJson.h>
@@ -79,6 +80,11 @@ char strftime_buf[64];
 struct tm timeinfo;
 
 /*********************************************************
+ * ADC for tank level monitoring
+ * ******************************************************/
+Adafruit_ADS1115 ads(0x48);
+
+/*********************************************************
 **Function Definitions for PlatformIO
 *********************************************************/
 float * getDeviceData (int deviceNumber);
@@ -93,6 +99,7 @@ void setup()
   Serial.println();
   Serial.println("setup");
   delay(100);
+  ads.begin();  //Start the A/D converter
   Serial.println("Looking for INA device");
   // IMPORTANT: if no INA devices are found the program will just continue to loop looking
   // for them! If you are unsure, run this with a serial monitor so you are sure you have 
