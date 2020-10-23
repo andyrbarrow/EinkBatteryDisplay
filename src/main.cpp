@@ -25,7 +25,7 @@
 //this is version 5 of ArduinoJson. Some day I'll port to version 6 ....
 #include <ArduinoJson.h>
 #include <WiFiUdp.h>
-#include "time.h"
+#include <time.h>
 #include "lwip/apps/sntp.h"
 
 /**************************************************************************************************
@@ -47,6 +47,8 @@ const uint8_t  batt2CurrentDev = 2;
 
 const char * batt1Name = "HOUSE";
 const char * batt2Name = "ENGINE";
+const char * tank1Name = "FORE";
+const char * tank2Name = "STBD";
 int refreshCounter = 0;
 
 /*********************************************************
@@ -72,12 +74,22 @@ const char* batt1CurrentKey = "electrical.batteries.bank1.current";
 const char* batt2VoltageKey = "electrical.batteries.bank2.voltage";
 const char* batt2CurrentKey = "electrical.batteries.bank2.current";
 
+// SignalK keys for level of the two tanks
+const char* tank1LevelKey = "tanks.freshWater.forwardTank.currentLevel";
+const char* tank2LevelKey = "tanks.freshWater.starboardTank.currentLevel";
+
 /********************************************************
  * Time
 ********************************************************/
 time_t now;
 char strftime_buf[64];
 struct tm timeinfo;
+char ntpserver1[] = "10.10.10.1";
+//char ntpserver2[] = "pool.ntp.org";
+
+// This is to avoid PlatformIO Intellisense issues with time.h
+_VOID      _EXFUN(tzset,	(_VOID));
+int	_EXFUN(setenv,(const char *__string, const char *__value, int __overwrite));
 
 /*********************************************************
  * ADC for tank level monitoring
@@ -88,7 +100,8 @@ Adafruit_ADS1115 ads(0x48);
 **Function Definitions for PlatformIO
 *********************************************************/
 float * getDeviceData (int deviceNumber);
-void drawScreenOutline();
+void drawScreenOutlineBatt();
+void drawScreenOutlineTank();
 void setup_wifi();
 void testUDP();
 void sendSigK(String sigKey, float data);
@@ -99,7 +112,7 @@ void setup()
   Serial.println();
   Serial.println("setup");
   delay(100);
-  ads.begin();  //Start the A/D converter
+  ads.begin();  //Start the A/D converter for tank level measurement
   Serial.println("Looking for INA device");
   // IMPORTANT: if no INA devices are found the program will just continue to loop looking
   // for them! If you are unsure, run this with a serial monitor so you are sure you have 
@@ -120,12 +133,12 @@ void setup()
   INA.alertOnBusOverVoltage(true, 15000); // Trigger alert if over 15V on bus
   // initialize the epaper display
   display.init(115200);
-  drawScreenOutline();
+  drawScreenOutlineBatt();
   setup_wifi();
   sntp_setoperatingmode(SNTP_OPMODE_POLL);
   // This assumes your RPI server has NTP running. You can use the SignalK "Set System Time" plugin to set the time
-  sntp_setservername(0, "10.10.10.1");
-  sntp_setservername(0, "pool.ntp.org");
+  sntp_setservername(0, ntpserver1);
+  //sntp_setservername(0, ntpserver2);
   sntp_init();
 }
 
@@ -176,11 +189,11 @@ void loop()
       display.print(busChar);
       display.setCursor(box_x + 80, cursor_y);
       display.print(" V");
-      display.setCursor(box_x, cursor_y+35);
+      display.setCursor(box_x, cursor_y + 35);
       display.print(busMAChar);
-      display.setCursor(box_x + 80, cursor_y+35);
+      display.setCursor(box_x + 80, cursor_y + 33);
       display.print(" A");
-      display.setCursor(box_x+20, cursor_y + 53);
+      display.setCursor(box_x + 20, cursor_y + 53);
       display.setFont(&FreeSansBold9pt7b);
       strftime(strftime_buf, sizeof(strftime_buf), "%D", &timeinfo);
       display.print(strftime_buf);
@@ -216,9 +229,9 @@ void loop()
       display.print(busChar);
       display.setCursor(box_x + 80, cursor_y);
       display.print(" V");
-      display.setCursor(box_x, cursor_y+35);
+      display.setCursor(box_x, cursor_y+33);
       display.print(busMAChar);
-      display.setCursor(box_x + 80, cursor_y+35);
+      display.setCursor(box_x + 80, cursor_y+33);
       display.print(" A");
       display.setFont(&FreeSansBold9pt7b);
       display.setCursor(box_x+20, cursor_y + 53);
@@ -260,7 +273,7 @@ void loop()
   // setting this to 2400 will fully refresh the screen about every 10 minutes.
   if (refreshCounter > 2400){
     // This will refresh the entire screen
-    drawScreenOutline();
+    drawScreenOutlineBatt();
     refreshCounter = 0;
   }
 }
@@ -278,17 +291,16 @@ float * getDeviceData (int deviceNumber){
     return x;
 }
 
-void drawScreenOutline()
+void drawScreenOutlineBatt()
 {
   // Draw two side-by-side boxes
-  display.setRotation(0);
+  display.setRotation(3); // Set to horizontal orentation
   display.setFullWindow();
   display.firstPage();
   do { //Draw two boxes on the screen
     display.fillScreen(GxEPD_BLACK);
-    display.fillRect(37,2,display.width()-4, (display.height()/2)-4,GxEPD_WHITE);
-    display.fillRect(37, (display.height() / 2)+2, display.width()-4, (display.height()/2)-4,GxEPD_WHITE);
-    display.setRotation(3);
+    display.fillRect(2,37, ((display.width()/2) - 3), display.height() - 39, GxEPD_WHITE);
+    display.fillRect((display.width() / 2)+2, 37,  (display.width()/2) - 3, display.height()-39, GxEPD_WHITE);
     display.setFont(&FreeSansBold18pt7b);
     display.setTextColor(GxEPD_WHITE);
     display.setCursor(12, 30);
@@ -304,6 +316,31 @@ void drawScreenOutline()
   setup_wifi();
 }
  
+void drawScreenOutlineTank()
+{
+  // Draw two side-by-side boxes
+  display.setRotation(3); // Set to horizontal orientation
+  display.setFullWindow();
+  display.firstPage();
+  do { //Draw two boxes on the screen
+    display.fillScreen(GxEPD_BLACK);
+    display.fillRect(2,37, ((display.width()/2) - 3), display.height() - 39, GxEPD_WHITE);
+    display.fillRect((display.width() / 2)+2, 37,  (display.width()/2) - 3, display.height()-39, GxEPD_WHITE);
+    display.setFont(&FreeSansBold18pt7b);
+    display.setTextColor(GxEPD_WHITE);
+    display.setCursor(12, 30);
+    display.print(tank1Name);
+    display.setCursor(154, 30);
+    display.print(tank2Name);
+  }
+  while (display.nextPage());
+  
+  // if the device didn't find wifi before, it will just move on after 30 seconds. Here we check again for
+  // wifi. This will delay reading battery voltage 30 seconds, so if you don't want that delay and don't care about
+  // reconnecting WiFi, comment this out. If wifi is already connected, there will be no delay.
+  setup_wifi();
+}
+
 void setup_wifi() {
   delay(10);
   Serial.println();
@@ -315,8 +352,8 @@ void setup_wifi() {
     Serial.print(".");
     /* Decided not to do this, so the device can go ahead an start 
        even if the wifi isn't working. You can uncomment this if you want
-       the device to keep trying wifi
-*/
+       the device to keep trying wifi*/
+
     //If WiFi doesn't connect in 60 seconds, do a software reset
     /*reset_index ++;
     if (reset_index > 60) {
@@ -358,7 +395,7 @@ void sendSigK(String sigKey, float data)
    JsonObject &thisValue = values.createNestedObject();
    thisValue["path"] = sigKey;
    thisValue["value"] = data;
-   thisUpdate["Source"] = "BatterySensors";
+   thisUpdate["Source"] = "PanelSensors";
 
    // Send UDP packet
    udp.beginPacket(sigkserverip, sigkserverport);
