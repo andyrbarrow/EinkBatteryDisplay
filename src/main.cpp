@@ -47,15 +47,18 @@ const uint8_t  batt2CurrentDev = 2;
 
 const char * batt1Name = "HOUSE";
 const char * batt2Name = "ENGINE";
+
+// You'll also need to name the tanks
 const char * tank1Name = "FORE";
 const char * tank2Name = "STBD";
-int refreshCounter = 0;
+
+int refreshCounter = 0; //this is a global varable set up to count until a full screen refresh is needed
 
 /*********************************************************
  * WIfi and SignalK
 *********************************************************/
 // We'll be sending SignalK data to a server via UDP. You'll have to tell
-// the server that you have a new UDP connection available
+// the SignalK server that you have a new UDP connection available
 WiFiUDP udp;
 
 // Your wifi credentials go here
@@ -66,6 +69,7 @@ const char* password = "margaritaville";
 IPAddress sigkserverip(10,10,10,1);
 // This is the port number you need to tell your server
 uint16_t sigkserverport = 55561;
+
 byte sendSig_Flag = 1;
 
 // SignalK keys for power from the two battery banks
@@ -78,17 +82,22 @@ const char* batt2CurrentKey = "electrical.batteries.bank2.current";
 const char* tank1LevelKey = "tanks.freshWater.forwardTank.currentLevel";
 const char* tank2LevelKey = "tanks.freshWater.starboardTank.currentLevel";
 
-/********************************************************
- * Time
-********************************************************/
+/*********************************************************************************************
+* Time
+* Right now, the system is set up to get time just from the RPI. If you want more accurate time
+* you'll need an internet connection so you can get time from pool.ntp.org. You can also just 
+* go to the RPI for time, and make sure it is getting it's time from an accurate source.
+* SignalK has a plugin to set system time from GPS.
+* *******************************************************************************************/
 time_t now;
 char strftime_buf[64];
 struct tm timeinfo;
 char ntpserver1[] = "10.10.10.1";
-//char ntpserver2[] = "pool.ntp.org";
+//char ntpserver2[] = "pool.ntp.org"; //You can get time from the net if you have a connection
+const char localTimeZone[8] = "CST6CDT";
 
 // This is to avoid PlatformIO Intellisense issues with time.h
-_VOID      _EXFUN(tzset,	(_VOID));
+_VOID _EXFUN(tzset,	(_VOID));
 int	_EXFUN(setenv,(const char *__string, const char *__value, int __overwrite));
 
 /*********************************************************
@@ -97,14 +106,15 @@ int	_EXFUN(setenv,(const char *__string, const char *__value, int __overwrite));
 Adafruit_ADS1115 ads(0x48);
 
 /*********************************************************
-**Function Definitions for PlatformIO
-*********************************************************/
-float * getDeviceData (int deviceNumber);
+* Function Definitions for PlatformIO
+* *******************************************************/
+float * getBattDeviceData (int deviceNumber);
 void drawScreenOutlineBatt();
 void drawScreenOutlineTank();
 void setup_wifi();
 void testUDP();
 void sendSigK(String sigKey, float data);
+float * getTankData ();
 
 void setup()
 {
@@ -154,22 +164,22 @@ void loop()
   uint16_t box_y = 45;
   uint16_t box_w = 115;
   uint16_t box_h = 70;
-  uint16_t cursor_y = box_y + box_h - 50;
+  uint16_t cursor_y = box_y + box_h - 47;
   
   time(&now);
-  setenv("TZ", "CST6CDT", 1);
+  setenv("TZ", localTimeZone, 1);
   tzset();
   localtime_r(&now, &timeinfo);
 
   Serial.println("Battery 1");
   Serial.print("Voltage: ");
-  x = getDeviceData(batt1VoltageDev);
+  x = getBattDeviceData(batt1VoltageDev);
   realVolts = x[0] / 1000.0;
   sendSigK(batt1VoltageKey, realVolts); //send to SignalK
   dtostrf(realVolts, 2, 1, busChar);
   Serial.print(busChar);
   Serial.print(" Current: ");
-  x = getDeviceData(batt1CurrentDev);
+  x = getBattDeviceData(batt1CurrentDev);
   shuntAmps = x[1] / SHUNT_MICRO_OHM;
   sendSigK(batt1CurrentKey, shuntAmps); //send to SignalK
   dtostrf(shuntAmps, 2, 1, busMAChar);
@@ -189,11 +199,11 @@ void loop()
       display.print(busChar);
       display.setCursor(box_x + 80, cursor_y);
       display.print(" V");
-      display.setCursor(box_x, cursor_y + 35);
+      display.setCursor(box_x, cursor_y + 32);
       display.print(busMAChar);
-      display.setCursor(box_x + 80, cursor_y + 33);
+      display.setCursor(box_x + 80, cursor_y + 32);
       display.print(" A");
-      display.setCursor(box_x + 20, cursor_y + 53);
+      display.setCursor(box_x + 20, cursor_y + 50);
       display.setFont(&FreeSansBold9pt7b);
       strftime(strftime_buf, sizeof(strftime_buf), "%D", &timeinfo);
       display.print(strftime_buf);
@@ -201,13 +211,13 @@ void loop()
   while (display.nextPage());
   Serial.println("Battery 2");
   Serial.print("Voltage: ");
-  x = getDeviceData(batt2VoltageDev);
+  x = getBattDeviceData(batt2VoltageDev);
   realVolts = x[0] / 1000.0;
   sendSigK(batt2VoltageKey, realVolts); //send to SignalK
   dtostrf(realVolts, 2, 1, busChar);
   Serial.print(busChar);
   Serial.print(" Current: ");
-  x = getDeviceData(batt2CurrentDev);
+  x = getBattDeviceData(batt2CurrentDev);
   shuntAmps = x[1] / SHUNT_MICRO_OHM;
   sendSigK(batt2CurrentKey, shuntAmps); //send to SignalK
   dtostrf(shuntAmps, 2, 1, busMAChar);
@@ -229,12 +239,12 @@ void loop()
       display.print(busChar);
       display.setCursor(box_x + 80, cursor_y);
       display.print(" V");
-      display.setCursor(box_x, cursor_y+33);
+      display.setCursor(box_x, cursor_y+32);
       display.print(busMAChar);
-      display.setCursor(box_x + 80, cursor_y+33);
+      display.setCursor(box_x + 80, cursor_y+32);
       display.print(" A");
       display.setFont(&FreeSansBold9pt7b);
-      display.setCursor(box_x+20, cursor_y + 53);
+      display.setCursor(box_x+20, cursor_y + 50);
       strftime(strftime_buf, sizeof(strftime_buf), "%T", &timeinfo);
       display.print(strftime_buf);
     }
@@ -247,7 +257,7 @@ void loop()
   //Serial.print("== === ====== ======== =========== =========== ===========\n");
   for (uint8_t i = 0; i < devicesFound; i++)  // Loop through all devices
   {
-    x = getDeviceData(i);
+    x = getBattDeviceData(i);
     busMilliVolts = x[0];
     shuntMicroVolts = x[1];
     busMicroAmps = x[2];
@@ -278,8 +288,8 @@ void loop()
   }
 }
 
-//Go and get the data from a specific device
-float * getDeviceData (int deviceNumber){
+// Batteries: Go and get the data from a specific device number
+float * getBattDeviceData (int deviceNumber){
 
   static float x[4];
     
@@ -291,13 +301,27 @@ float * getDeviceData (int deviceNumber){
     return x;
 }
 
+// Here were grabbing the ADC data. We're only using two of these right now, but we'll grab all four
+float * getTankData () {
+  
+  static float x[4];
+
+  x[0] = ads.readADC_SingleEnded(0);
+  x[1] = ads.readADC_SingleEnded(1);
+  x[2] = ads.readADC_SingleEnded(2);
+  x[3] = ads.readADC_SingleEnded(3);
+
+  return x;
+}
+
+// this builds the screen for the battery display
 void drawScreenOutlineBatt()
 {
-  // Draw two side-by-side boxes
+  // Draw two side-by-side boxes with black areas at the top for titles
   display.setRotation(3); // Set to horizontal orentation
   display.setFullWindow();
   display.firstPage();
-  do { //Draw two boxes on the screen
+  do { //Draw two boxes on the screen with a black area at the top for titles
     display.fillScreen(GxEPD_BLACK);
     display.fillRect(2,37, ((display.width()/2) - 3), display.height() - 39, GxEPD_WHITE);
     display.fillRect((display.width() / 2)+2, 37,  (display.width()/2) - 3, display.height()-39, GxEPD_WHITE);
@@ -315,7 +339,8 @@ void drawScreenOutlineBatt()
   // reconnecting WiFi, comment this out. If wifi is already connected, there will be no delay.
   setup_wifi();
 }
- 
+
+//This builds the screen for the tank display
 void drawScreenOutlineTank()
 {
   // Draw two side-by-side boxes
@@ -348,7 +373,7 @@ void setup_wifi() {
   WiFi.begin(ssid, password);
   int reset_index = 0;
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    delay(500); // this sets how long the device will wait for a wifi connection
     Serial.print(".");
     /* Decided not to do this, so the device can go ahead an start 
        even if the wifi isn't working. You can uncomment this if you want
