@@ -11,6 +11,8 @@
 // BUSY -> 4, RST -> 16, DC -> 17, CS -> SS(5), CLK -> SCK(18), DIN -> MOSI(23), GND -> GND, 3.3V -> 3.3V
 
 #define ENABLE_GxEPD2_GFX 1
+#define BATTERY_DISPLAY 0
+#define TANK_DISPLAY 1
 
 #include <Arduino.h>
 #include <GxEPD2_BW.h>
@@ -49,8 +51,8 @@ const char * batt1Name = "HOUSE";
 const char * batt2Name = "ENGINE";
 
 // You'll also need to name the tanks
-const char * tank1Name = "FORE";
-const char * tank2Name = "STBD";
+const char * tank1Name = " FORE";
+const char * tank2Name = " STBD";
 
 int refreshCounter = 0; //this is a global varable set up to count until a full screen refresh is needed
 
@@ -104,6 +106,12 @@ int	_EXFUN(setenv,(const char *__string, const char *__value, int __overwrite));
  * ADC for tank level monitoring
  * ******************************************************/
 Adafruit_ADS1115 ads(0x48);
+
+/*********************************************************
+ * Touch Control
+ * ******************************************************/
+const uint8_t touchCtrlRight = 15;
+uint8_t screen_mode = BATTERY_DISPLAY;
 
 /*********************************************************
 * Function Definitions for PlatformIO
@@ -170,6 +178,24 @@ void loop()
   setenv("TZ", localTimeZone, 1);
   tzset();
   localtime_r(&now, &timeinfo);
+
+  /**************************************
+   * Read Touch Controls
+   * ***********************************/
+  Serial.print("Right Touch ");
+  Serial.println(touchRead(touchCtrlRight));
+  if (touchRead(touchCtrlRight) < 30){
+    Serial.println("RIGHT TOUCH");
+    if (screen_mode == BATTERY_DISPLAY){
+      screen_mode = TANK_DISPLAY;
+      drawScreenOutlineTank();
+    }
+    else {
+      screen_mode = BATTERY_DISPLAY;
+      drawScreenOutlineBatt();
+    }
+  }
+
 
   Serial.println("Battery 1");
   Serial.print("Voltage: ");
@@ -306,12 +332,12 @@ float * getTankData () {
   
   static float x[4];
 
-  x[0] = ads.readADC_SingleEnded(0);
-  x[1] = ads.readADC_SingleEnded(1);
-  x[2] = ads.readADC_SingleEnded(2);
-  x[3] = ads.readADC_SingleEnded(3);
+    x[0] = ads.readADC_SingleEnded(0);
+    x[1] = ads.readADC_SingleEnded(1);
+    x[2] = ads.readADC_SingleEnded(2);
+    x[3] = ads.readADC_SingleEnded(3);
 
-  return x;
+    return x;
 }
 
 // this builds the screen for the battery display
