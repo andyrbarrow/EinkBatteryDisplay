@@ -56,6 +56,12 @@ const char * tank2Name = " STBD";
 
 int refreshCounter = 0; //this is a global varable set up to count until a full screen refresh is needed
 
+// Display offset for right side
+int rightOffset = 148;
+const uint8_t left_screen = 0;
+const uint8_t right_screen = 1;
+
+
 /*********************************************************
  * WIfi and SignalK
 *********************************************************/
@@ -75,10 +81,10 @@ uint16_t sigkserverport = 55561;
 byte sendSig_Flag = 1;
 
 // SignalK keys for power from the two battery banks
-const char* batt1VoltageKey = "electrical.batteries.bank1.voltage";
-const char* batt1CurrentKey = "electrical.batteries.bank1.current";
-const char* batt2VoltageKey = "electrical.batteries.bank2.voltage";
-const char* batt2CurrentKey = "electrical.batteries.bank2.current";
+const char* batt1VoltageKey = "electrical.batteries.house.voltage";
+const char* batt1CurrentKey = "electrical.batteries.house.current";
+const char* batt2VoltageKey = "electrical.batteries.engine.voltage";
+const char* batt2CurrentKey = "electrical.batteries.engine.current";
 
 // SignalK keys for level of the two tanks
 const char* tank1LevelKey = "tanks.freshWater.forwardTank.currentLevel";
@@ -87,8 +93,10 @@ const char* tank2LevelKey = "tanks.freshWater.starboardTank.currentLevel";
 /*********************************************************************************************
 * Time
 * Right now, the system is set up to get time just from the RPI. If you want more accurate time
-* you'll need an internet connection so you can get time from pool.ntp.org. You can also just 
-* go to the RPI for time, and make sure it is getting it's time from an accurate source.
+* you'll need an internet connection so you can get time from pool.ntp.org, or you'll need a 
+* GPS hat or other device with a poll output. You can also just  go to the RPI for time, and 
+* make sure it is getting it's time from an accurate source.
+* 
 * SignalK has a plugin to set system time from GPS.
 * *******************************************************************************************/
 time_t now;
@@ -123,6 +131,7 @@ void setup_wifi();
 void testUDP();
 void sendSigK(String sigKey, float data);
 float * getTankData ();
+void display_batt(float shuntAmps, float realVolts, uint8_t rightside);
 
 void setup()
 {
@@ -131,6 +140,8 @@ void setup()
   Serial.println("setup");
   delay(100);
   ads.begin();  //Start the A/D converter for tank level measurement
+
+  // Setup Battery Monitor
   Serial.println("Looking for INA device");
   // IMPORTANT: if no INA devices are found the program will just continue to loop looking
   // for them! If you are unsure, run this with a serial monitor so you are sure you have 
@@ -149,10 +160,16 @@ void setup()
   INA.setAveraging(32);                   // Average each reading n-times
   INA.setMode(INA_MODE_CONTINUOUS_BOTH);  // Bus/shunt measured continuously
   INA.alertOnBusOverVoltage(true, 15000); // Trigger alert if over 15V on bus
-  // initialize the epaper display
+
+  // Initialize the epaper display
   display.init(115200);
+
+  // Start with the battery display
   drawScreenOutlineBatt();
+
   setup_wifi();
+
+  // Set up the ESP to retreive time from the server
   sntp_setoperatingmode(SNTP_OPMODE_POLL);
   // This assumes your RPI server has NTP running. You can use the SignalK "Set System Time" plugin to set the time
   sntp_setservername(0, ntpserver1);
@@ -162,28 +179,23 @@ void setup()
 
 void loop()
 {
-  static char     sprintfBuffer[100];  // Buffer to format output
-  static char     busChar[8], busMAChar[10];  // Output buffers
+  static char busChar[8], busMAChar[10];  // Output buffers
   float shuntAmps;
   float realVolts;
-  float *x;
+  float *ina_Output;
 
-  uint16_t box_x = 20;
-  uint16_t box_y = 45;
-  uint16_t box_w = 115;
-  uint16_t box_h = 70;
-  uint16_t cursor_y = box_y + box_h - 47;
-  
   time(&now);
   setenv("TZ", localTimeZone, 1);
   tzset();
   localtime_r(&now, &timeinfo);
 
   /**************************************
-   * Read Touch Controls
+   * Read Touch Control
    * ***********************************/
   Serial.print("Right Touch ");
   Serial.println(touchRead(touchCtrlRight));
+
+  // Toggle between Battery display and Tank display
   if (touchRead(touchCtrlRight) < 30){
     Serial.println("RIGHT TOUCH");
     if (screen_mode == BATTERY_DISPLAY){
@@ -196,85 +208,58 @@ void loop()
     }
   }
 
-
-  Serial.println("Battery 1");
-  Serial.print("Voltage: ");
-  x = getBattDeviceData(batt1VoltageDev);
-  realVolts = x[0] / 1000.0;
+  /*****************************
+   * Battery Bank 1
+   * **************************/
+  // Volts
+  ina_Output = getBattDeviceData(batt1VoltageDev);
+  realVolts = ina_Output[0] / 1000.0;
   sendSigK(batt1VoltageKey, realVolts); //send to SignalK
   dtostrf(realVolts, 2, 1, busChar);
+  Serial.println("Battery 1");
+  Serial.print("Voltage: ");
   Serial.print(busChar);
-  Serial.print(" Current: ");
-  x = getBattDeviceData(batt1CurrentDev);
-  shuntAmps = x[1] / SHUNT_MICRO_OHM;
+
+  // Amps
+  ina_Output = getBattDeviceData(batt1CurrentDev);
+  shuntAmps = ina_Output[1] / SHUNT_MICRO_OHM;
   sendSigK(batt1CurrentKey, shuntAmps); //send to SignalK
   dtostrf(shuntAmps, 2, 1, busMAChar);
+  Serial.print(" Current: ");
   Serial.print(busMAChar);
   Serial.println();
-  sprintf(sprintfBuffer, "Batt 1: %sV %sA\n", busChar, busMAChar);
+  
+  // Print it on the left side
+  if (screen_mode == BATTERY_DISPLAY) {
+    display_batt(shuntAmps, realVolts, left_screen);
+  }
 
-  display.setFont(&FreeSansBold18pt7b);
-  display.setTextColor(GxEPD_BLACK);
-  display.setRotation(3);
-  display.firstPage();
-  do
-    {
-      display.setPartialWindow(box_x, box_y, box_w, box_h);
-      display.fillRect(box_x, box_y, box_w, box_h, GxEPD_WHITE);
-      display.setCursor(box_x, cursor_y);
-      display.print(busChar);
-      display.setCursor(box_x + 80, cursor_y);
-      display.print(" V");
-      display.setCursor(box_x, cursor_y + 32);
-      display.print(busMAChar);
-      display.setCursor(box_x + 80, cursor_y + 32);
-      display.print(" A");
-      display.setCursor(box_x + 20, cursor_y + 50);
-      display.setFont(&FreeSansBold9pt7b);
-      strftime(strftime_buf, sizeof(strftime_buf), "%D", &timeinfo);
-      display.print(strftime_buf);
-    }
-  while (display.nextPage());
-  Serial.println("Battery 2");
-  Serial.print("Voltage: ");
-  x = getBattDeviceData(batt2VoltageDev);
-  realVolts = x[0] / 1000.0;
+  /******************************
+   * Battery Bank 2
+   * ***************************/
+  // Volts
+  ina_Output = getBattDeviceData(batt2VoltageDev);
+  realVolts = ina_Output[0] / 1000.0;
   sendSigK(batt2VoltageKey, realVolts); //send to SignalK
   dtostrf(realVolts, 2, 1, busChar);
+  Serial.println("Battery 2");
+  Serial.print("Voltage: ");
   Serial.print(busChar);
-  Serial.print(" Current: ");
-  x = getBattDeviceData(batt2CurrentDev);
-  shuntAmps = x[1] / SHUNT_MICRO_OHM;
+
+  // Amps
+  ina_Output = getBattDeviceData(batt2CurrentDev);
+  shuntAmps = ina_Output[1] / SHUNT_MICRO_OHM;
   sendSigK(batt2CurrentKey, shuntAmps); //send to SignalK
   dtostrf(shuntAmps, 2, 1, busMAChar);
+  Serial.print(" Current: ");
   Serial.print(busMAChar);
   Serial.println();
-  sprintf(sprintfBuffer, "Batt 2: %sV %sA\n", busChar, busMAChar);
-  display.setFont(&FreeSansBold18pt7b);
-  display.setTextColor(GxEPD_BLACK);
-  display.setRotation(3);
-  display.setPartialWindow(box_x, box_y, box_w, box_h);
-  display.firstPage();
-  box_x = box_x + 148;
-  
-  do
-    {
-      display.setPartialWindow(box_x, box_y, box_w, box_h);
-      display.fillRect(box_x, box_y, box_w, box_h, GxEPD_WHITE);
-      display.setCursor(box_x, cursor_y);
-      display.print(busChar);
-      display.setCursor(box_x + 80, cursor_y);
-      display.print(" V");
-      display.setCursor(box_x, cursor_y+32);
-      display.print(busMAChar);
-      display.setCursor(box_x + 80, cursor_y+32);
-      display.print(" A");
-      display.setFont(&FreeSansBold9pt7b);
-      display.setCursor(box_x+20, cursor_y + 50);
-      strftime(strftime_buf, sizeof(strftime_buf), "%T", &timeinfo);
-      display.print(strftime_buf);
-    }
-  while (display.nextPage());
+
+  // Print it on the right side
+  if (screen_mode == BATTERY_DISPLAY) {
+    display_batt(shuntAmps, realVolts, right_screen);
+  }
+
   /* Uncomment this to detect and display device numbers
   static uint16_t loopCounter = 0;     // Count the number of iterations
   static char     shuntChar[10], busMWChar[10];  // Output buffers
@@ -304,12 +289,16 @@ void loop()
   Serial.print("Loop iteration ");
   Serial.print(++loopCounter);
   Serial.print("\n\n");*/
+
   refreshCounter ++;
   // Do a full screen refresh to keep the display healthy. With a B/W screen there are about 4 cycles/second, so 
   // setting this to 2400 will fully refresh the screen about every 10 minutes.
   if (refreshCounter > 2400){
-    // This will refresh the entire screen
-    drawScreenOutlineBatt();
+    if (screen_mode == BATTERY_DISPLAY){
+      drawScreenOutlineBatt();
+    }  else {
+      drawScreenOutlineTank();
+    }
     refreshCounter = 0;
   }
 }
@@ -390,6 +379,51 @@ void drawScreenOutlineTank()
   // wifi. This will delay reading battery voltage 30 seconds, so if you don't want that delay and don't care about
   // reconnecting WiFi, comment this out. If wifi is already connected, there will be no delay.
   setup_wifi();
+}
+
+void display_batt(float shuntAmps, float realVolts, uint8_t rightside){
+  
+  static char     busChar[8], busMAChar[10];  // Output buffers
+  uint16_t box_x = 20;
+  uint16_t box_y = 45;
+  uint16_t box_w = 115;
+  uint16_t box_h = 70;
+  uint16_t cursor_y = box_y + box_h - 47;
+  
+  if (rightside){
+        box_x = box_x + rightOffset;
+  }
+
+  dtostrf(realVolts, 2, 1, busChar);
+  dtostrf(shuntAmps, 2, 1, busMAChar);
+  display.setFont(&FreeSansBold18pt7b);
+  display.setTextColor(GxEPD_BLACK);
+  display.setRotation(3);
+  display.firstPage();
+  do
+    {
+      display.setPartialWindow(box_x, box_y, box_w, box_h);
+      display.fillRect(box_x, box_y, box_w, box_h, GxEPD_WHITE);
+      display.setCursor(box_x, cursor_y);
+      display.print(busChar);
+      display.setCursor(box_x + 80, cursor_y);
+      display.print(" V");
+      display.setCursor(box_x, cursor_y + 32);
+      display.print(busMAChar);
+      display.setCursor(box_x + 80, cursor_y + 32);
+      display.print(" A");
+      display.setCursor(box_x + 20, cursor_y + 50);
+      display.setFont(&FreeSansBold9pt7b);
+
+      // Print date on the left, time on the right
+      if (rightside){
+        strftime(strftime_buf, sizeof(strftime_buf), "%T", &timeinfo);
+      } else {
+        strftime(strftime_buf, sizeof(strftime_buf), "%D", &timeinfo);
+      }
+      display.print(strftime_buf);
+    }
+  while (display.nextPage());
 }
 
 void setup_wifi() {
