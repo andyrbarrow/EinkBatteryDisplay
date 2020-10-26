@@ -1,8 +1,7 @@
-// Battery display system using E-paper display and INA3221 three-channel voltage/current sensors
-//
-// based on e-ink display library by Jean-Marc Zingg and SignalK UDP sender 
-// by PaddyB
-//
+// Battery and tank level display system using E-paper display and INA3221 three-channel voltage/current sensors
+// for battery sensors, and an ADC1115 4 channel ADC for tank level.
+// 
+// Based on e-ink display library by Jean-Marc Zingg and SignalK UDP sender by PaddyB
 //
 // by Andy Barrow (andy@sailor.nu)
 //
@@ -39,7 +38,7 @@ const uint16_t MAXIMUM_AMPS    = 200;     ///< Max expected amps, values are 1 -
 uint8_t        devicesFound    = 0;       ///< Number of INAs found
 INA_Class      INA;                       ///< INA class instantiation
 
-// This is done with two INA3221 devices, using two channels each. They are detected here is device numbers,
+// Battery monitoring with two INA3221 devices, using two channels each. They are detected here is device numbers,
 // One of the devices needs to have the I2C default address changed by jumper.
 // You'll have to scan them with this program (uncomment below) to figure out which is which. Device numbers start at 0
 const uint8_t  batt1VoltageDev = 4;
@@ -56,7 +55,7 @@ const char * tank2Name = " STBD";
 
 int refreshCounter = 0; //this is a global varable set up to count until a full screen refresh is needed
 
-// Display offset for right side
+// Display offset for right side, in pixels
 int rightOffset = 148;
 const uint8_t left_screen = 0;
 const uint8_t right_screen = 1;
@@ -104,7 +103,7 @@ char strftime_buf[64];
 struct tm timeinfo;
 char ntpserver1[] = "10.10.10.1";
 //char ntpserver2[] = "pool.ntp.org"; //You can get time from the net if you have a connection
-const char localTimeZone[8] = "CST6CDT";
+const char localTimeZone[23] = "CST6CDT,M4.1.0,M10.5.0";
 
 // This is to avoid PlatformIO Intellisense issues with time.h
 _VOID _EXFUN(tzset,	(_VOID));
@@ -300,6 +299,8 @@ void loop()
       drawScreenOutlineTank();
     }
     refreshCounter = 0;
+    
+    return;
   }
 }
 
@@ -353,6 +354,8 @@ void drawScreenOutlineBatt()
   // wifi. This will delay reading battery voltage 30 seconds, so if you don't want that delay and don't care about
   // reconnecting WiFi, comment this out. If wifi is already connected, there will be no delay.
   setup_wifi();
+
+  return;
 }
 
 //This builds the screen for the tank display
@@ -379,11 +382,13 @@ void drawScreenOutlineTank()
   // wifi. This will delay reading battery voltage 30 seconds, so if you don't want that delay and don't care about
   // reconnecting WiFi, comment this out. If wifi is already connected, there will be no delay.
   setup_wifi();
+
+  return;
 }
 
 void display_batt(float shuntAmps, float realVolts, uint8_t rightside){
   
-  static char     busChar[8], busMAChar[10];  // Output buffers
+  static char busChar[8], busMAChar[10];  // Output buffers
   uint16_t box_x = 20;
   uint16_t box_y = 45;
   uint16_t box_w = 115;
@@ -391,7 +396,7 @@ void display_batt(float shuntAmps, float realVolts, uint8_t rightside){
   uint16_t cursor_y = box_y + box_h - 47;
   
   if (rightside){
-        box_x = box_x + rightOffset;
+    box_x = box_x + rightOffset;
   }
 
   dtostrf(realVolts, 2, 1, busChar);
@@ -424,6 +429,8 @@ void display_batt(float shuntAmps, float realVolts, uint8_t rightside){
       display.print(strftime_buf);
     }
   while (display.nextPage());
+
+  return;
 }
 
 void setup_wifi() {
@@ -461,6 +468,7 @@ void setup_wifi() {
       return;
     }
   }
+  return;
 }
 // send signalk data over UDP - thanks to PaddyB!
 void sendSigK(String sigKey, float data)
@@ -490,4 +498,6 @@ void sendSigK(String sigKey, float data)
    delta.printTo(Serial);
    Serial.println();
  }
+
+ return;
 }
