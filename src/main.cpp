@@ -19,6 +19,7 @@
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSansBold9pt7b.h>
+#include "heydings.h"
 #include "GxEPD2_boards_added.h"
 #include <INA.h>
 #include <Adafruit_ADS1015.h>
@@ -57,8 +58,6 @@ int refreshCounter = 0; //this is a global varable set up to count until a full 
 
 // Display offset for right side, in pixels
 int rightOffset = 148;
-const uint8_t left_screen = 0;
-const uint8_t right_screen = 1;
 
 
 /*********************************************************
@@ -101,8 +100,10 @@ const char* tank2LevelKey = "tanks.freshWater.starboardTank.currentLevel";
 time_t now;
 char strftime_buf[64];
 struct tm timeinfo;
+//Set this for your NTP server(s)
 char ntpserver1[] = "10.10.10.1";
 //char ntpserver2[] = "pool.ntp.org"; //You can get time from the net if you have a connection
+//This is the Bahia de Banderas time zone. Set it for yours.
 const char localTimeZone[23] = "CST6CDT,M4.1.0,M10.5.0";
 
 // This is to avoid PlatformIO Intellisense issues with time.h
@@ -130,7 +131,9 @@ void setup_wifi();
 void testUDP();
 void sendSigK(String sigKey, float data);
 float * getTankData ();
-void display_batt(float shuntAmps, float realVolts, uint8_t rightside);
+void display_batt(float shuntAmps, float realVolts, bool rightSide);
+int tankLevelAdjust(float tankLavel, bool leftTank);
+void display_tank(int tankLevel, bool rightSide);
 
 void setup()
 {
@@ -182,6 +185,11 @@ void loop()
   float shuntAmps;
   float realVolts;
   float *ina_Output;
+  float *adc_Output;
+  bool leftTank = true;
+  bool rightTank = false;
+  bool leftBatt = false;
+  bool rightBatt = true;
 
   time(&now);
   setenv("TZ", localTimeZone, 1);
@@ -230,7 +238,7 @@ void loop()
   
   // Print it on the left side
   if (screen_mode == BATTERY_DISPLAY) {
-    display_batt(shuntAmps, realVolts, left_screen);
+    display_batt(shuntAmps, realVolts, leftBatt);
   }
 
   /******************************
@@ -256,8 +264,34 @@ void loop()
 
   // Print it on the right side
   if (screen_mode == BATTERY_DISPLAY) {
-    display_batt(shuntAmps, realVolts, right_screen);
+    display_batt(shuntAmps, realVolts, rightBatt);
   }
+/*******************************************************
+ * ADC Tank Level Sensor
+ * ****************************************************/
+float tankLevel;
+adc_Output = getTankData();
+Serial.print("ADC1: ");
+tankLevel = (adc_Output[0]/24672)*100;
+Serial.println(tankLevelAdjust(tankLevel, leftTank));
+sendSigK(tank1LevelKey, tankLevel); //send to SignalK
+
+if (screen_mode == TANK_DISPLAY) {
+  display_tank(tankLevelAdjust(tankLevel, leftTank), leftTank);
+}
+
+Serial.print("ADC2: ");
+tankLevel = (adc_Output[1]/24672)*100;
+Serial.println(tankLevelAdjust(tankLevel, rightTank));
+sendSigK(tank2LevelKey, tankLevel); //send to SignalK
+
+if (screen_mode == TANK_DISPLAY) {
+  display_tank(tankLevelAdjust(tankLevel, rightTank), rightTank);
+}
+
+Serial.println();
+delay(500);
+
 
   /* Uncomment this to detect and display device numbers
   static uint16_t loopCounter = 0;     // Count the number of iterations
@@ -340,7 +374,7 @@ void drawScreenOutlineBatt()
   do { //Draw two boxes on the screen with a black area at the top for titles
     display.fillScreen(GxEPD_BLACK);
     display.fillRect(2,37, ((display.width()/2) - 3), display.height() - 39, GxEPD_WHITE);
-    display.fillRect((display.width() / 2)+2, 37,  (display.width()/2) - 3, display.height()-39, GxEPD_WHITE);
+    display.fillRect((display.width() / 2)+2, 37,  (display.width()/2) - 4, display.height()-39, GxEPD_WHITE);
     display.setFont(&FreeSansBold18pt7b);
     display.setTextColor(GxEPD_WHITE);
     display.setCursor(12, 30);
@@ -368,7 +402,7 @@ void drawScreenOutlineTank()
   do { //Draw two boxes on the screen
     display.fillScreen(GxEPD_BLACK);
     display.fillRect(2,37, ((display.width()/2) - 3), display.height() - 39, GxEPD_WHITE);
-    display.fillRect((display.width() / 2)+2, 37,  (display.width()/2) - 3, display.height()-39, GxEPD_WHITE);
+    display.fillRect((display.width() / 2)+2, 37,  (display.width()/2) - 4, display.height()-39, GxEPD_WHITE);
     display.setFont(&FreeSansBold18pt7b);
     display.setTextColor(GxEPD_WHITE);
     display.setCursor(12, 30);
@@ -386,7 +420,7 @@ void drawScreenOutlineTank()
   return;
 }
 
-void display_batt(float shuntAmps, float realVolts, uint8_t rightside){
+void display_batt(float shuntAmps, float realVolts, bool rightSide){
   
   static char busChar[8], busMAChar[10];  // Output buffers
   uint16_t box_x = 20;
@@ -395,7 +429,7 @@ void display_batt(float shuntAmps, float realVolts, uint8_t rightside){
   uint16_t box_h = 70;
   uint16_t cursor_y = box_y + box_h - 47;
   
-  if (rightside){
+  if (rightSide){
     box_x = box_x + rightOffset;
   }
 
@@ -421,16 +455,127 @@ void display_batt(float shuntAmps, float realVolts, uint8_t rightside){
       display.setFont(&FreeSansBold9pt7b);
 
       // Print date on the left, time on the right
-      if (rightside){
+      if (rightSide){
         strftime(strftime_buf, sizeof(strftime_buf), "%T", &timeinfo);
       } else {
         strftime(strftime_buf, sizeof(strftime_buf), "%D", &timeinfo);
       }
       display.print(strftime_buf);
+
+      if (rightSide) {
+        display.setCursor(box_x + 100, cursor_y + 50);
+        display.setFont(&heydings_icons9pt7b);
+        if (WiFi.status() == WL_CONNECTED){
+          display.print("R");
+        } else {
+          display.print("X");
+        } 
+      }
+    }
+  while (display.nextPage());
+  
+  return;
+}
+
+void display_tank(int tankLevel, bool rightSide){
+  
+  uint16_t box_x = 20;
+  if (rightSide){
+    box_x = box_x + rightOffset;
+  }
+  uint16_t box_y = 45;
+  uint16_t box_w = 115;
+  uint16_t box_h = 70;
+  uint16_t cursor_y = box_y + box_h - 35;
+  uint16_t cursor_x = box_x + 20;
+  
+  display.setFont(&FreeSansBold18pt7b);
+  display.setTextColor(GxEPD_BLACK);
+  display.setRotation(3);
+  display.firstPage();
+  do
+    {
+      display.setPartialWindow(box_x, box_y, box_w, box_h);
+      display.fillRect(box_x, box_y, box_w, box_h, GxEPD_WHITE);
+      display.setCursor(cursor_x, cursor_y);
+      display.print(tankLevel);
+      display.print("%");
+      display.setCursor(box_x + 20, cursor_y + 35);
+      display.setFont(&FreeSansBold9pt7b);
+      // Print date on the left, time on the right
+      if (rightSide){
+        strftime(strftime_buf, sizeof(strftime_buf), "%T", &timeinfo);
+      } else {
+        strftime(strftime_buf, sizeof(strftime_buf), "%D", &timeinfo);
+      }
+      display.print(strftime_buf);
+            
+      if (rightSide) {
+        display.setCursor(box_x + 100, cursor_y + 35);
+        display.setFont(&heydings_icons9pt7b);
+        if (WiFi.status() == WL_CONNECTED){
+          display.print("R");
+        } else {
+          display.print("X");
+        } 
+      }
     }
   while (display.nextPage());
 
   return;
+}
+
+int tankLevelAdjust(float tankLevel, bool leftTank){
+  // Use this function to adjust for oddly shaped tanks or non-linear sensors
+  // Tank displayed on the left display. The "tankLevel" variable is what is coming
+  // from the sensor. The returned value is what is actually in the tank.
+  // Some resistive sensors seem to have a lot of resistors closely grouped togehter
+  // so you'll have to play with these values to match your sensor output and your tank(s)
+  if (leftTank) { // Left display
+    if (tankLevel > 99) {
+      return 100;
+    } else if (tankLevel > 90){
+      return 90;
+    } else if (tankLevel > 80){
+      return 80;
+    } else if (tankLevel > 70){
+      return 70;
+    } else if (tankLevel > 60){
+      return 60;
+    } else if (tankLevel > 50){
+      return 50;
+    } else if (tankLevel > 40){
+      return 40;
+    } else if (tankLevel > 30){
+      return 30;
+    } else if (tankLevel > 20){
+      return 20;
+    } else {
+      return 10;
+    }
+  } else { // Right display
+    if (tankLevel > 99) {
+      return 100;
+    } else if (tankLevel > 90){
+      return 90;
+    } else if (tankLevel > 80){
+      return 80;
+    } else if (tankLevel > 70){
+      return 70;
+    } else if (tankLevel > 60){
+      return 60;
+    } else if (tankLevel > 50){
+      return 50;
+    } else if (tankLevel > 40){
+      return 40;
+    } else if (tankLevel > 30){
+      return 30;
+    } else if (tankLevel > 20){
+      return 20;
+    } else {
+      return 10;
+    }
+  }
 }
 
 void setup_wifi() {
