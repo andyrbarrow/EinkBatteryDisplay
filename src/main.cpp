@@ -117,6 +117,8 @@ Adafruit_ADS1115 ads(0x48);
 
 /*********************************************************
  * Touch Control
+ * If you touch the bottom right screw, the screen toggles
+ * between battery display and tank display
  * ******************************************************/
 const uint8_t touchCtrlRight = 15;
 uint8_t screen_mode = BATTERY_DISPLAY;
@@ -266,6 +268,7 @@ void loop()
   if (screen_mode == BATTERY_DISPLAY) {
     display_batt(shuntAmps, realVolts, rightBatt);
   }
+
 /*******************************************************
  * ADC Tank Level Sensor
  * ****************************************************/
@@ -405,10 +408,16 @@ void drawScreenOutlineTank()
     display.fillRect((display.width() / 2)+2, 37,  (display.width()/2) - 4, display.height()-39, GxEPD_WHITE);
     display.setFont(&FreeSansBold18pt7b);
     display.setTextColor(GxEPD_WHITE);
-    display.setCursor(12, 30);
+    display.setCursor(18, 30);
     display.print(tank1Name);
-    display.setCursor(154, 30);
+    display.setCursor(160, 30);
     display.print(tank2Name);
+    display.setFont(&FreeSansBold9pt7b);
+    display.setTextColor(GxEPD_BLACK);
+    display.setCursor(12, 52);
+    display.print("WATER TANK");
+    display.setCursor(162,52);
+    display.print("WATER TANK");
   }
   while (display.nextPage());
   
@@ -462,6 +471,7 @@ void display_batt(float shuntAmps, float realVolts, bool rightSide){
       }
       display.print(strftime_buf);
 
+  // This displays a little network icon on the bottom right if the network is connected
       if (rightSide) {
         display.setCursor(box_x + 100, cursor_y + 50);
         display.setFont(&heydings_icons9pt7b);
@@ -483,10 +493,10 @@ void display_tank(int tankLevel, bool rightSide){
   if (rightSide){
     box_x = box_x + rightOffset;
   }
-  uint16_t box_y = 45;
+  uint16_t box_y = 60;
   uint16_t box_w = 115;
-  uint16_t box_h = 70;
-  uint16_t cursor_y = box_y + box_h - 35;
+  uint16_t box_h = 55;
+  uint16_t cursor_y = box_y + box_h - 25;
   uint16_t cursor_x = box_x + 20;
   
   display.setFont(&FreeSansBold18pt7b);
@@ -500,7 +510,7 @@ void display_tank(int tankLevel, bool rightSide){
       display.setCursor(cursor_x, cursor_y);
       display.print(tankLevel);
       display.print("%");
-      display.setCursor(box_x + 20, cursor_y + 35);
+      display.setCursor(box_x + 20, cursor_y + 27);
       display.setFont(&FreeSansBold9pt7b);
       // Print date on the left, time on the right
       if (rightSide){
@@ -509,9 +519,10 @@ void display_tank(int tankLevel, bool rightSide){
         strftime(strftime_buf, sizeof(strftime_buf), "%D", &timeinfo);
       }
       display.print(strftime_buf);
-            
+      
+  // This displays a little network icon on the bottom right if the network is connected
       if (rightSide) {
-        display.setCursor(box_x + 100, cursor_y + 35);
+        display.setCursor(box_x + 100, cursor_y + 27);
         display.setFont(&heydings_icons9pt7b);
         if (WiFi.status() == WL_CONNECTED){
           display.print("R");
