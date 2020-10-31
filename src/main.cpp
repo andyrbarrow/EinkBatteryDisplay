@@ -124,6 +124,39 @@ const uint8_t touchCtrlRight = 15;
 uint8_t screen_mode = BATTERY_DISPLAY;
 
 /*********************************************************
+ * Screen positions / size of strings
+ * We are saving these as a global so we can erase the 
+ * minimum amount of screen prior to screen update when
+ * we return to the display funtion
+ * ******************************************************/
+int16_t   tank1LevelX, tank1LevelY;
+uint16_t  tank1Width, tank1Height;
+int16_t   tank2LevelX, tank2LevelY;
+uint16_t  tank2Width, tank2Height;
+int16_t   batt1VoltX, batt1VoltY;
+uint16_t  batt1VoltWidth, batt1VoltHeight;
+int16_t   batt1AmpX, batt1AmpY;
+uint16_t  batt1AmpWidth, batt1AmpHeight;
+int16_t   batt2VoltX, batt2VoltY;
+uint16_t  batt2VoltWidth, batt2VoltHeight;
+int16_t   batt2AmpX, batt2AmpY;
+uint16_t  batt2AmpWidth, batt2AmpHeight;
+int16_t   dateX, dateY;
+uint16_t  dateWidth, dateHeight;
+int16_t   timeX, timeY;
+uint16_t  timeWidth, timeHeight;
+int16_t   netIconX, netIconY;
+uint16_t  netIconWidth, netIconHeight;
+
+/*********************************************************
+ * Left and right screen sizes
+ * ******************************************************/
+uint16_t  halfScreen_x, halfScreen_y;
+uint16_t  halfScreen_w, halfScreen_h;
+uint16_t  rightScreenOffset;
+uint16_t  borderWidth;
+
+/*********************************************************
 * Function Definitions for PlatformIO
 * *******************************************************/
 float * getBattDeviceData (int deviceNumber);
@@ -168,6 +201,15 @@ void setup()
   // Initialize the epaper display
   display.init(115200);
 
+  // Get and set sub_screen sizes
+  display.setRotation(3);
+  borderWidth = 2;
+  halfScreen_x = 2;
+  halfScreen_y = 37;
+  halfScreen_w = (display.width() / 2) - (borderWidth * 2);
+  halfScreen_h = (display.height()) - halfScreen_y - 3;
+  rightScreenOffset = (display.width() / 2);
+
   // Start with the battery display
   drawScreenOutlineBatt();
 
@@ -177,8 +219,9 @@ void setup()
   sntp_setoperatingmode(SNTP_OPMODE_POLL);
   // This assumes your RPI server has NTP running. You can use the SignalK "Set System Time" plugin to set the time
   sntp_setservername(0, ntpserver1);
-  //sntp_setservername(0, ntpserver2);
+  // sntp_setservername(0, ntpserver2);
   sntp_init();
+
 }
 
 void loop()
@@ -376,8 +419,8 @@ void drawScreenOutlineBatt()
   display.firstPage();
   do { //Draw two boxes on the screen with a black area at the top for titles
     display.fillScreen(GxEPD_BLACK);
-    display.fillRect(2,37, ((display.width()/2) - 3), display.height() - 39, GxEPD_WHITE);
-    display.fillRect((display.width() / 2)+2, 37,  (display.width()/2) - 4, display.height()-39, GxEPD_WHITE);
+    display.fillRect(halfScreen_x, halfScreen_y, halfScreen_w, halfScreen_h, GxEPD_WHITE);
+    display.fillRect(halfScreen_x + rightScreenOffset, halfScreen_y,  halfScreen_w, halfScreen_h, GxEPD_WHITE);
     display.setFont(&FreeSansBold18pt7b);
     display.setTextColor(GxEPD_WHITE);
     display.setCursor(12, 30);
@@ -404,8 +447,8 @@ void drawScreenOutlineTank()
   display.firstPage();
   do { //Draw two boxes on the screen
     display.fillScreen(GxEPD_BLACK);
-    display.fillRect(2,37, ((display.width()/2) - 3), display.height() - 39, GxEPD_WHITE);
-    display.fillRect((display.width() / 2)+2, 37,  (display.width()/2) - 4, display.height()-39, GxEPD_WHITE);
+    display.fillRect(halfScreen_x, halfScreen_y, halfScreen_w, halfScreen_h, GxEPD_WHITE);
+    display.fillRect(halfScreen_x + rightScreenOffset, halfScreen_y,  halfScreen_w, halfScreen_h, GxEPD_WHITE);
     display.setFont(&FreeSansBold18pt7b);
     display.setTextColor(GxEPD_WHITE);
     display.setCursor(18, 30);
@@ -432,15 +475,17 @@ void drawScreenOutlineTank()
 void display_batt(float shuntAmps, float realVolts, bool rightSide){
   
   static char busChar[8], busMAChar[10];  // Output buffers
-  uint16_t box_x = 20;
-  uint16_t box_y = 45;
-  uint16_t box_w = 115;
-  uint16_t box_h = 70;
-  uint16_t cursor_y = box_y + box_h - 47;
-  
+  uint16_t box_x = halfScreen_x;
   if (rightSide){
-    box_x = box_x + rightOffset;
+    box_x = box_x + rightScreenOffset;
   }
+  uint16_t box_y = halfScreen_y + 4;
+  uint16_t box_w = halfScreen_w;
+  uint16_t box_h = halfScreen_h - 10;
+  uint16_t cursor_y = box_y + box_h - 54;
+  uint16_t cursor_x = box_x + 20;
+
+  display.setRotation(3);
 
   dtostrf(realVolts, 2, 1, busChar);
   dtostrf(shuntAmps, 2, 1, busMAChar);
@@ -452,15 +497,15 @@ void display_batt(float shuntAmps, float realVolts, bool rightSide){
     {
       display.setPartialWindow(box_x, box_y, box_w, box_h);
       display.fillRect(box_x, box_y, box_w, box_h, GxEPD_WHITE);
-      display.setCursor(box_x, cursor_y);
+      display.setCursor(cursor_x, cursor_y);
       display.print(busChar);
-      display.setCursor(box_x + 80, cursor_y);
+      display.setCursor(cursor_x + 80, cursor_y);
       display.print(" V");
-      display.setCursor(box_x, cursor_y + 32);
+      display.setCursor(cursor_x, cursor_y + 32);
       display.print(busMAChar);
-      display.setCursor(box_x + 80, cursor_y + 32);
+      display.setCursor(cursor_x + 80, cursor_y + 32);
       display.print(" A");
-      display.setCursor(box_x + 20, cursor_y + 50);
+      display.setCursor(cursor_x + 20, cursor_y + 53);
       display.setFont(&FreeSansBold9pt7b);
 
       // Print date on the left, time on the right
@@ -473,7 +518,7 @@ void display_batt(float shuntAmps, float realVolts, bool rightSide){
 
   // This displays a little network icon on the bottom right if the network is connected
       if (rightSide) {
-        display.setCursor(box_x + 100, cursor_y + 50);
+        display.setCursor(box_x + 120, cursor_y + 53);
         display.setFont(&heydings_icons9pt7b);
         if (WiFi.status() == WL_CONNECTED){
           display.print("R");
@@ -489,15 +534,17 @@ void display_batt(float shuntAmps, float realVolts, bool rightSide){
 
 void display_tank(int tankLevel, bool rightSide){
   
-  uint16_t box_x = 20;
+  uint16_t box_x = halfScreen_x;
   if (rightSide){
-    box_x = box_x + rightOffset;
+    box_x = box_x + rightScreenOffset;
   }
-  uint16_t box_y = 60;
-  uint16_t box_w = 115;
-  uint16_t box_h = 55;
-  uint16_t cursor_y = box_y + box_h - 25;
+  uint16_t box_y = halfScreen_y + 20;
+  uint16_t box_w = halfScreen_w;
+  uint16_t box_h = halfScreen_h - 25;
+  uint16_t cursor_y = box_y + box_h - 30;
   uint16_t cursor_x = box_x + 20;
+  String tankString;
+
   
   display.setFont(&FreeSansBold18pt7b);
   display.setTextColor(GxEPD_BLACK);
@@ -506,29 +553,43 @@ void display_tank(int tankLevel, bool rightSide){
   do
     {
       display.setPartialWindow(box_x, box_y, box_w, box_h);
-      display.fillRect(box_x, box_y, box_w, box_h, GxEPD_WHITE);
-      display.setCursor(cursor_x, cursor_y);
-      display.print(tankLevel);
-      display.print("%");
-      display.setCursor(box_x + 20, cursor_y + 27);
+      tankString = String(tankLevel);
+      tankString = tankString + "%";
+      if (rightSide){
+        display.fillRect(tank2LevelX, tank2LevelY, tank2Width, tank2Height, GxEPD_WHITE);
+        display.getTextBounds(tankString, cursor_x, cursor_y, &tank2LevelX, &tank2LevelY, &tank2Width, &tank2Height);
+        display.setCursor(box_x + (box_w/2 - tank2Width/2), cursor_y);
+      } else {
+        display.fillRect(tank1LevelX, tank1LevelY, tank1Width, tank1Height, GxEPD_WHITE);
+        display.getTextBounds(tankString, cursor_x, cursor_y, &tank1LevelX, &tank1LevelY, &tank1Width, &tank1Height);
+        display.setCursor(box_x + (box_w/2 - tank1Width/2), cursor_y);
+      }
+      display.print(tankString);
+      display.setCursor(box_x + 20, cursor_y + 25);
       display.setFont(&FreeSansBold9pt7b);
       // Print date on the left, time on the right
       if (rightSide){
+        display.fillRect(timeX, timeY, timeWidth, timeHeight, GxEPD_WHITE);
         strftime(strftime_buf, sizeof(strftime_buf), "%T", &timeinfo);
+        display.getTextBounds(strftime_buf, display.getCursorX(), display.getCursorY(), &timeX, &timeY, &timeWidth, &timeHeight);
+        display.setCursor(box_x + (box_w/2 - timeWidth/2), cursor_y + 25);
       } else {
+        display.fillRect(dateX, dateY, dateWidth, dateHeight, GxEPD_WHITE);
         strftime(strftime_buf, sizeof(strftime_buf), "%D", &timeinfo);
+        display.getTextBounds(strftime_buf, display.getCursorX(), display.getCursorY(), &dateX, &dateY, &dateWidth, &dateHeight);
+        display.setCursor(box_x + (box_w/2 - timeWidth/2), cursor_y + 25);
       }
       display.print(strftime_buf);
-      
-  // This displays a little network icon on the bottom right if the network is connected
+
+      // This displays a little network icon on the bottom right if the network is connected
       if (rightSide) {
-        display.setCursor(box_x + 100, cursor_y + 27);
+        display.setCursor(box_x + 120, cursor_y + 25);
         display.setFont(&heydings_icons9pt7b);
         if (WiFi.status() == WL_CONNECTED){
           display.print("R");
         } else {
           display.print("X");
-        } 
+        }
       }
     }
   while (display.nextPage());
