@@ -194,7 +194,7 @@ void setup()
   Serial.println(" INA devices on the I2C bus");
   INA.setBusConversion(8500);             // Maximum conversion time 8.244ms
   INA.setShuntConversion(8500);           // Maximum conversion time 8.244ms
-  INA.setAveraging(32);                   // Average each reading n-times
+  INA.setAveraging(128);                   // Average each reading n-times
   INA.setMode(INA_MODE_CONTINUOUS_BOTH);  // Bus/shunt measured continuously
   INA.alertOnBusOverVoltage(true, 15000); // Trigger alert if over 15V on bus
 
