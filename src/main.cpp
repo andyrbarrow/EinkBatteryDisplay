@@ -20,7 +20,7 @@
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSansBold9pt7b.h>
 #include "heydings.h"
-#include "GxEPD2_boards_added.h"
+#include "GxEPD2_display_selection_added.h"
 #include <INA.h>
 #include <Adafruit_ADS1015.h>
 #include <WiFi.h>
@@ -638,8 +638,10 @@ int tankLevelAdjust(float tankLevel, bool leftTank){
       return 30;
     } else if (tankLevel > 20){
       return 20;
-    } else {
+    } else if (tankLevel > 10){
       return 10;
+    } else {
+      return 0;
     }
   } else { // Right display
     if (tankLevel > 99) {
@@ -660,8 +662,10 @@ int tankLevelAdjust(float tankLevel, bool leftTank){
       return 30;
     } else if (tankLevel > 20){
       return 20;
-    } else {
+    } else if (tankLevel > 10){
       return 10;
+    } else {
+      return 0;
     }
   }
 }
