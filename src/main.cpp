@@ -258,6 +258,11 @@ void loop()
       screen_mode = BATTERY_DISPLAY;
       drawScreenOutlineBatt();
     }
+    int heapSize = esp_get_free_heap_size();
+    Serial.print("Heap is: ");
+    Serial.print(heapSize);
+    Serial.println();
+
   }
 
   /*****************************
@@ -266,20 +271,24 @@ void loop()
   // Volts
   ina_Output = getBattDeviceData(batt1VoltageDev);
   realVolts = ina_Output[0] / 1000.0;
+  //this is a kluge because the voltage sensor is reading .5v low
+  if (realVolts > 0){
+    realVolts = realVolts + 0.5;
+  }
   sendSigK(batt1VoltageKey, realVolts); //send to SignalK
   dtostrf(realVolts, 2, 1, busChar);
-  Serial.println("Battery 1");
-  Serial.print("Voltage: ");
-  Serial.print(busChar);
+  // Serial.println("Battery 1");
+  // Serial.print("Voltage: ");
+  // Serial.print(busChar);
 
   // Amps
   ina_Output = getBattDeviceData(batt1CurrentDev);
   shuntAmps = ina_Output[1] / SHUNT_MICRO_OHM;
   sendSigK(batt1CurrentKey, shuntAmps); //send to SignalK
   dtostrf(shuntAmps, 2, 1, busMAChar);
-  Serial.print(" Current: ");
-  Serial.print(busMAChar);
-  Serial.println();
+  // Serial.print(" Current: ");
+  // Serial.print(busMAChar);
+  // Serial.println();
   
   // Print it on the left side
   if (screen_mode == BATTERY_DISPLAY) {
@@ -292,20 +301,24 @@ void loop()
   // Volts
   ina_Output = getBattDeviceData(batt2VoltageDev);
   realVolts = ina_Output[0] / 1000.0;
+  //this is a kluge because the voltage sensor is reading .5v low
+  if (realVolts > 0){
+    realVolts = realVolts + 0.5;
+  }
   sendSigK(batt2VoltageKey, realVolts); //send to SignalK
   dtostrf(realVolts, 2, 1, busChar);
-  Serial.println("Battery 2");
-  Serial.print("Voltage: ");
-  Serial.print(busChar);
+  // Serial.println("Battery 2");
+  // Serial.print("Voltage: ");
+  // Serial.print(busChar);
 
   // Amps
   ina_Output = getBattDeviceData(batt2CurrentDev);
   shuntAmps = ina_Output[1] / SHUNT_MICRO_OHM;
   sendSigK(batt2CurrentKey, shuntAmps); //send to SignalK
   dtostrf(shuntAmps, 2, 1, busMAChar);
-  Serial.print(" Current: ");
-  Serial.print(busMAChar);
-  Serial.println();
+  // Serial.print(" Current: ");
+  // Serial.print(busMAChar);
+  // Serial.println();
 
   // Print it on the right side
   if (screen_mode == BATTERY_DISPLAY) {
@@ -318,7 +331,9 @@ void loop()
 float tankLevel;
 adc_Output = getTankData();
 Serial.print("ADC1: ");
-tankLevel = (adc_Output[0]/24672)*100;
+// tankLevel = (adc_Output[0]/24672)*100;
+tankLevel = (adc_Output[0]/12336)*100;
+
 Serial.println(tankLevelAdjust(tankLevel, leftTank));
 sendSigK(tank1LevelKey, tankLevel); //send to SignalK
 
@@ -327,7 +342,8 @@ if (screen_mode == TANK_DISPLAY) {
 }
 
 Serial.print("ADC2: ");
-tankLevel = (adc_Output[1]/24672)*100;
+// tankLevel = (adc_Output[1]/24672)*100;
+tankLevel = (adc_Output[1]/12336)*100;
 Serial.println(tankLevelAdjust(tankLevel, rightTank));
 sendSigK(tank2LevelKey, tankLevel); //send to SignalK
 
@@ -712,8 +728,8 @@ void sendSigK(String sigKey, float data)
    delta.printTo(udp);
    udp.println();
    udp.endPacket();
-   delta.printTo(Serial);
-   Serial.println();
+  //  delta.printTo(Serial);
+  //  Serial.println();
  }
 
  return;
