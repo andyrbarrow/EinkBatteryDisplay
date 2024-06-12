@@ -176,6 +176,19 @@ void setup()
   Serial.println("setup");
   delay(100);
   ads.begin(); // Start the A/D converter for tank level measurement
+  // Initialize the epaper display
+  display.init(115200);
+  // Get and set sub_screen sizes
+  display.setRotation(3);
+  borderWidth = 2;
+  halfScreen_x = 2;
+  halfScreen_y = 37;
+  halfScreen_w = (display.width() / 2) - (borderWidth * 2);
+  halfScreen_h = (display.height()) - halfScreen_y - 3;
+  rightScreenOffset = (display.width() / 2);
+
+  // Start with the battery display
+  drawScreenOutlineBatt();
 
   // Setup Battery Monitor
   Serial.println("Looking for INA device");
@@ -197,21 +210,6 @@ void setup()
   INA.setAveraging(128);                  // Average each reading n-times
   INA.setMode(INA_MODE_CONTINUOUS_BOTH);  // Bus/shunt measured continuously
   INA.alertOnBusOverVoltage(true, 15000); // Trigger alert if over 15V on bus
-
-  // Initialize the epaper display
-  display.init(115200);
-
-  // Get and set sub_screen sizes
-  display.setRotation(3);
-  borderWidth = 2;
-  halfScreen_x = 2;
-  halfScreen_y = 37;
-  halfScreen_w = (display.width() / 2) - (borderWidth * 2);
-  halfScreen_h = (display.height()) - halfScreen_y - 3;
-  rightScreenOffset = (display.width() / 2);
-
-  // Start with the battery display
-  drawScreenOutlineBatt();
 
   setup_wifi();
 
@@ -615,7 +613,7 @@ void display_tank(int tankLevel, bool rightSide)
       display.getTextBounds(strftime_buf, display.getCursorX(), display.getCursorY(), &timeX, &timeY, &timeWidth, &timeHeight);
       display.setCursor(box_x + (box_w / 2 - timeWidth / 2), cursor_y + 25);
     }
-    else
+    else //left side of the screen
     {
       display.fillRect(dateX, dateY, dateWidth, dateHeight, GxEPD_WHITE);
       strftime(strftime_buf, sizeof(strftime_buf), "%D", &timeinfo);
