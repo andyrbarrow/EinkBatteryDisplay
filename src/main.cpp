@@ -100,10 +100,10 @@ time_t now;
 char strftime_buf[64];
 struct tm timeinfo;
 // Set this for your NTP server(s)
-char ntpserver1[] = "10.10.10.1";
-char ntpserver2[] = "216.238.85.87"; //You can get time from the net if you have a connection
+//char ntpserver1[] = "10.10.10.1";
+char ntpserver1[] = "pool.ntp.org"; //You can get time from the net if you have a connection
 // This is the Bahia de Banderas time zone. Set it for yours.
-const char localTimeZone[23] = "CST6CDT,M4.1.0,M10.5.0";
+const char localTimeZone[23] = "<GMT-6>+6";
 
 // This is to avoid PlatformIO Intellisense issues with time.h
 //_VOID _EXFUN(tzset,	(_VOID));
