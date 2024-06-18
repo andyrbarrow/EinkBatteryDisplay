@@ -67,7 +67,7 @@ int rightOffset = 148;
 WiFiUDP udp;
 
 // Your wifi credentials go here
-const char *ssid = "openplotter";
+const char *ssid = "CASANET4";
 const char *password = "margaritaville";
 
 // The address and port of your SignalK server goes here
@@ -101,7 +101,7 @@ char strftime_buf[64];
 struct tm timeinfo;
 // Set this for your NTP server(s)
 char ntpserver1[] = "10.10.10.1";
-// char ntpserver2[] = "pool.ntp.org"; //You can get time from the net if you have a connection
+char ntpserver2[] = "216.238.85.87"; //You can get time from the net if you have a connection
 // This is the Bahia de Banderas time zone. Set it for yours.
 const char localTimeZone[23] = "CST6CDT,M4.1.0,M10.5.0";
 
@@ -168,14 +168,17 @@ float *getTankData();
 void display_batt(float shuntAmps, float realVolts, bool rightSide);
 int tankLevelAdjust(float tankLavel, bool leftTank);
 void display_tank(int tankLevel, bool rightSide);
+void displayStatus(String firstLine, String secondLine);
 
 void setup()
 {
+  String statusLine1;
+  String statusLine2;
+
   Serial.begin(115200);
   Serial.println();
   Serial.println("setup");
   delay(100);
-  ads.begin(); // Start the A/D converter for tank level measurement
   // Initialize the epaper display
   display.init(115200);
   // Get and set sub_screen sizes
@@ -186,12 +189,13 @@ void setup()
   halfScreen_w = (display.width() / 2) - (borderWidth * 2);
   halfScreen_h = (display.height()) - halfScreen_y - 3;
   rightScreenOffset = (display.width() / 2);
-
-  // Start with the battery display
-  drawScreenOutlineBatt();
+  
+  // Start the A/D converter for tank level measurement
+  ads.begin(); 
 
   // Setup Battery Monitor
   Serial.println("Looking for INA device");
+  displayStatus("Looking for INA device", " ");
   // IMPORTANT: if no INA devices are found the program will just continue to loop looking
   // for them! If you are unsure, run this with a serial monitor so you are sure you have
   // INA sensors connected.
@@ -201,10 +205,17 @@ void setup()
   {
     Serial.println("No INA device found, retrying in 10 seconds...");
     delay(10000); // Wait 10 seconds before retrying
+    displayStatus("Looking for INA device", "Not found - retrying");
   }               // while no devices detected
   Serial.print(" - Detected ");
   Serial.print(devicesFound);
   Serial.println(" INA devices on the I2C bus");
+
+  statusLine1 = "INA devices detected";
+  statusLine2 = devicesFound;
+  statusLine2 = statusLine2 + " devices found";
+  displayStatus(statusLine1, statusLine2);
+  delay(1000);
   INA.setBusConversion(8500);             // Maximum conversion time 8.244ms
   INA.setShuntConversion(8500);           // Maximum conversion time 8.244ms
   INA.setAveraging(128);                  // Average each reading n-times
@@ -219,6 +230,9 @@ void setup()
   sntp_setservername(0, ntpserver1);
   // sntp_setservername(0, ntpserver2);
   sntp_init();
+  
+  // Start with the battery display
+  drawScreenOutlineBatt(); 
 }
 
 void loop()
@@ -455,11 +469,6 @@ void drawScreenOutlineBatt()
     display.setCursor(154, 30);
     display.print(batt2Name);
   } while (display.nextPage());
-
-  // if the device didn't find wifi before, it will just move on after 30 seconds. Here we check again for
-  // wifi. This will delay reading battery voltage 30 seconds, so if you don't want that delay and don't care about
-  // reconnecting WiFi, comment this out. If wifi is already connected, there will be no delay.
-  setup_wifi();
 
   return;
 }
@@ -746,32 +755,32 @@ int tankLevelAdjust(float tankLevel, bool leftTank)
 
 void setup_wifi()
 {
+  String statusLine1;
+  String statusLine2;
+
   delay(10);
   Serial.println();
-  Serial.print("Connecting ");
+  Serial.print("Connecting to Wifi SSID: ");
+  Serial.println(ssid);
+  statusLine1 = "Connecting to WiFi";
+  statusLine2 = ssid;
+  displayStatus(statusLine1, statusLine2);
+
   WiFi.begin(ssid, password);
   int reset_index = 0;
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500); // this sets how long the device will wait for a wifi connection
     Serial.print(".");
-    /* Decided not to do this, so the device can go ahead an start
-       even if the wifi isn't working. You can uncomment this if you want
-       the device to keep trying wifi*/
-
-    // If WiFi doesn't connect in 60 seconds, do a software reset
-    /*reset_index ++;
-    if (reset_index > 60) {
-      Serial.println("WIFI Failed - restarting");
-      delay(1000);
-      ESP.restart();
-    }*/
-    // just give up. If you uncomment above, you must comment out this part
     reset_index++;
     if (reset_index > 60)
     {
       delay(500);
       Serial.println("Wifi connection did not complete. Proceeding.");
+      statusLine1 = "No connection to";
+      statusLine2 = ssid;
+      statusLine2 = statusLine2 + " proceeding";
+      displayStatus(statusLine1, statusLine2);
       return;
     }
     //-----------------------------------------
@@ -779,6 +788,10 @@ void setup_wifi()
     {
       Serial.println(" WiFi Connected");
       Serial.println(WiFi.localIP());
+      statusLine1 = "Connection Successful";
+      statusLine2 = "IP: ";
+      statusLine2 = statusLine2 + WiFi.localIP().toString();
+      displayStatus(statusLine1, statusLine2);
       delay(500);
       return;
     }
@@ -814,5 +827,23 @@ void sendSigK(String sigKey, float data)
     //  Serial.println();
   }
 
+  return;
+}
+
+void displayStatus(String firstLine, String secondLine)
+{ 
+    display.setRotation(3); // Set to horizontal orentation
+    display.setFullWindow();
+    display.firstPage();
+    do
+    { // Draw two boxes on the screen with a black area at the top for titles
+      display.fillScreen(GxEPD_WHITE);
+      display.setFont(&FreeSansBold12pt7b);
+      display.setTextColor(GxEPD_BLACK);
+      display.setCursor(12, 30);
+      display.print(firstLine);
+      display.setCursor(12, 60);
+      display.print(secondLine);
+    } while (display.nextPage());
   return;
 }
