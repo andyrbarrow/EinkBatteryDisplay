@@ -67,7 +67,7 @@ int rightOffset = 148;
 WiFiUDP udp;
 
 // Your wifi credentials go here
-const char *ssid = "CASANET4";
+const char *ssid = "openplotter";
 const char *password = "margaritaville";
 
 // The address and port of your SignalK server goes here
@@ -499,11 +499,6 @@ void drawScreenOutlineTank()
     display.print("WATER TANK");
   } while (display.nextPage());
 
-  // if the device didn't find wifi before, it will just move on after 30 seconds. Here we check again for
-  // wifi. This will delay reading battery voltage 30 seconds, so if you don't want that delay and don't care about
-  // reconnecting WiFi, comment this out. If wifi is already connected, there will be no delay.
-  setup_wifi();
-
   return;
 }
 
@@ -766,7 +761,10 @@ void setup_wifi()
   statusLine2 = ssid;
   displayStatus(statusLine1, statusLine2);
 
-  WiFi.begin(ssid, password);
+  WiFi.begin(ssid, NULL);
+  
+  
+  //WiFi.begin(ssid, password);
   int reset_index = 0;
   while (WiFi.status() != WL_CONNECTED)
   {
